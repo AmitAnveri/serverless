@@ -1,0 +1,30 @@
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
+}
+
+group 'com.csye6225'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+dependencies {
+    implementation 'com.amazonaws:aws-lambda-java-core:1.2.1'
+    implementation 'com.amazonaws:aws-lambda-java-events:3.11.0'
+    implementation 'software.amazon.awssdk:secretsmanager:2.20.0'
+    implementation 'software.amazon.awssdk:rds:2.20.0'
+    implementation 'org.postgresql:postgresql:42.2.20'
+    implementation 'com.squareup.okhttp3:okhttp:4.9.1'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.5'
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
