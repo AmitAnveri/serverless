@@ -24,6 +24,7 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
     private static final String MAILGUN_DOMAIN = System.getenv("MAILGUN_DOMAIN");
     private static final String DB_SECRET_NAME = System.getenv("DB_SECRET_NAME");
     private static final String VERIFICATION_EXPIRY = System.getenv("VERIFICATION_EXPIRY");
+    private static final String DOMAIN_NAME = System.getenv("DOMAIN_NAME");
 
     private static final OkHttpClient client = new OkHttpClient();
 
@@ -104,11 +105,13 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
     private Map<String, String> getDbCredentials(Context context) {
         try {
             context.getLogger().log("Retrieving secrets from Secrets Manager...");
-            SecretsManagerClient secretsClient = SecretsManagerClient.create();
-            GetSecretValueRequest getSecretValueRequest = GetSecretValueRequest.builder()
-                    .secretId(DB_SECRET_NAME)
-                    .build();
-            GetSecretValueResponse getSecretValueResponse = secretsClient.getSecretValue(getSecretValueRequest);
+            GetSecretValueResponse getSecretValueResponse;
+            try (SecretsManagerClient secretsClient = SecretsManagerClient.create()) {
+                GetSecretValueRequest getSecretValueRequest = GetSecretValueRequest.builder()
+                        .secretId(DB_SECRET_NAME)
+                        .build();
+                getSecretValueResponse = secretsClient.getSecretValue(getSecretValueRequest);
+            }
 
             String secretString = getSecretValueResponse.secretString();
             context.getLogger().log("Secrets retrieved successfully.");
@@ -156,7 +159,7 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
     }
 
     private void sendVerificationEmail(String email, String token, Context context) {
-        String verificationLink = String.format("https://%s/verify?token=%s", MAILGUN_DOMAIN, token);
+        String verificationLink = String.format("http://%s/v1/user/verify?token=%s", DOMAIN_NAME, token);
         context.getLogger().log("Generated verification link: " + verificationLink);
 
         RequestBody formBody = new FormBody.Builder()
