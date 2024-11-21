@@ -150,10 +150,15 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
         context.getLogger().log("Generated verification link: " + verificationLink);
 
         RequestBody formBody = new FormBody.Builder()
-                .add("from", "noreply@" + MAILGUN_DOMAIN)
+                .add("from", "support@" + MAILGUN_DOMAIN)
                 .add("to", email)
                 .add("subject", "Verify Your Email")
                 .add("text", "Click this link to verify your email: " + verificationLink)
+                .add("html", "<p>Click this link to verify your email: <a href=\"" + verificationLink + "\">" + verificationLink + "</a></p>")
+                .add("o:tag", "verification-email")
+                .add("o:tracking", "yes")
+                .add("o:tracking-clicks", "htmlonly")
+                .add("o:tracking-opens", "yes")
                 .build();
 
         Request request = new Request.Builder()
@@ -164,9 +169,11 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
 
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                context.getLogger().log("Failed to send email. Response: " + response.body().string());
-                throw new Exception("Failed to send email.");
+                String responseBody = response.body() != null ? response.body().string() : "No Response Body";
+                context.getLogger().log("Failed to send email. Response: " + responseBody);
+                throw new Exception("Failed to send email. Status: " + response.code());
             }
+            context.getLogger().log("Email sent successfully. Response: " + response.body().string());
         } catch (Exception e) {
             context.getLogger().log("Error sending email: " + e.getMessage());
             throw new RuntimeException("Error sending email: " + e.getMessage(), e);
