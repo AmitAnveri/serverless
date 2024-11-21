@@ -31,7 +31,6 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
     @Override
     public String handleRequest(SNSEvent event, Context context) {
         context.getLogger().log("Lambda triggered with SNS event.");
-        testInternetConnectivity(context);
         try {
             context.getLogger().log("Received SNS event: " + event);
 
@@ -74,18 +73,6 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
         } catch (Exception e) {
             context.getLogger().log("Error occurred: " + e.getMessage());
             return "Error: " + e.getMessage();
-        }
-    }
-
-    private void testInternetConnectivity(Context context) {
-        try {
-            URL url = new URL("https://secretsmanager.us-east-1.amazonaws.com");
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            int responseCode = connection.getResponseCode();
-            context.getLogger().log("Connectivity test response code: " + responseCode);
-        } catch (Exception e) {
-            context.getLogger().log("Connectivity test failed: " + e.getMessage());
         }
     }
 
