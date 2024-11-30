@@ -9,8 +9,6 @@ import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
 
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -20,9 +18,8 @@ import java.util.UUID;
 
 public class EmailVerificationLambda implements RequestHandler<SNSEvent, String> {
 
-    private static final String MAILGUN_API_KEY = System.getenv("MAILGUN_API_KEY");
-    private static final String MAILGUN_DOMAIN = System.getenv("MAILGUN_DOMAIN");
     private static final String DB_SECRET_NAME = System.getenv("DB_SECRET_NAME");
+    private static final String MAILGUN_SECRET_NAME = System.getenv("MAILGUN_SECRET_NAME");
     private static final String VERIFICATION_EXPIRY = System.getenv("VERIFICATION_EXPIRY");
     private static final String DOMAIN_NAME = System.getenv("DOMAIN_NAME");
 
@@ -53,6 +50,13 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
                 Map<String, String> dbCredentials = getDbCredentials(context);
                 context.getLogger().log("Database credentials fetched successfully.");
 
+                // Retrieve Mailgun Credentials
+                context.getLogger().log("Fetching Mailgun credentials...");
+                Map<String, String> mailgunCredentials = getMailgunCredentials(context);
+                String mailgunApiKey = mailgunCredentials.get("MAILGUN_API_KEY");
+                String mailgunDomain = mailgunCredentials.get("MAILGUN_DOMAIN");
+                context.getLogger().log("Mailgun credentials fetched successfully.");
+
                 // Generate Verification Token
                 String token = UUID.randomUUID().toString();
                 Instant expiry = Instant.now().plusSeconds(Long.parseLong(VERIFICATION_EXPIRY));
@@ -66,7 +70,7 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
 
                 // Send Verification Email
                 context.getLogger().log("Sending verification email to: " + email);
-                sendVerificationEmail(email, token, context);
+                sendVerificationEmail(email, token, mailgunApiKey, mailgunDomain, context);
                 context.getLogger().log("Verification email sent successfully to: " + email);
             }
             return "Emails processed successfully.";
@@ -90,34 +94,42 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
     }
 
     private Map<String, String> getDbCredentials(Context context) {
+        return getSecrets(context, DB_SECRET_NAME);
+    }
+
+    private Map<String, String> getMailgunCredentials(Context context) {
+        return getSecrets(context, MAILGUN_SECRET_NAME);
+    }
+
+    private Map<String, String> getSecrets(Context context, String secretName) {
         try {
-            context.getLogger().log("Retrieving secrets from Secrets Manager...");
+            context.getLogger().log("Retrieving secret from Secrets Manager: " + secretName);
             GetSecretValueResponse getSecretValueResponse;
             try (SecretsManagerClient secretsClient = SecretsManagerClient.create()) {
                 GetSecretValueRequest getSecretValueRequest = GetSecretValueRequest.builder()
-                        .secretId(DB_SECRET_NAME)
+                        .secretId(secretName)
                         .build();
                 getSecretValueResponse = secretsClient.getSecretValue(getSecretValueRequest);
             }
 
             String secretString = getSecretValueResponse.secretString();
-            context.getLogger().log("Secrets retrieved successfully.");
+            context.getLogger().log("Secret retrieved successfully.");
             return parseSecretString(secretString, context);
         } catch (Exception e) {
-            context.getLogger().log("Error retrieving secrets from Secrets Manager: " + e.getMessage());
-            throw new RuntimeException("Error retrieving secrets: " + e.getMessage(), e);
+            context.getLogger().log("Error retrieving secret from Secrets Manager: " + e.getMessage());
+            throw new RuntimeException("Error retrieving secret: " + e.getMessage(), e);
         }
     }
 
     private Map<String, String> parseSecretString(String secretString, Context context) {
         try {
-            context.getLogger().log("Parsing secrets JSON...");
+            context.getLogger().log("Parsing secret JSON...");
             ObjectMapper objectMapper = new ObjectMapper();
             return objectMapper.readValue(secretString, Map.class);
         } catch (Exception e) {
-            context.getLogger().log("Error parsing secrets JSON: " + e.getMessage());
-            context.getLogger().log("Raw secrets JSON: " + secretString);
-            throw new RuntimeException("Error parsing secrets JSON: " + e.getMessage(), e);
+            context.getLogger().log("Error parsing secret JSON: " + e.getMessage());
+            context.getLogger().log("Raw secret JSON: " + secretString);
+            throw new RuntimeException("Error parsing secret JSON: " + e.getMessage(), e);
         }
     }
 
@@ -145,12 +157,12 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
         }
     }
 
-    private void sendVerificationEmail(String email, String token, Context context) {
+    private void sendVerificationEmail(String email, String token, String mailgunApiKey, String mailgunDomain, Context context) {
         String verificationLink = String.format("http://%s/v1/user/verify?token=%s", DOMAIN_NAME, token);
         context.getLogger().log("Generated verification link: " + verificationLink);
 
         RequestBody formBody = new FormBody.Builder()
-                .add("from", "support@" + MAILGUN_DOMAIN)
+                .add("from", "support@" + mailgunDomain)
                 .add("to", email)
                 .add("subject", "Verify Your Email")
                 .add("text", "Click this link to verify your email: " + verificationLink)
@@ -162,9 +174,9 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
                 .build();
 
         Request request = new Request.Builder()
-                .url("https://api.mailgun.net/v3/" + MAILGUN_DOMAIN + "/messages")
+                .url("https://api.mailgun.net/v3/" + mailgunDomain + "/messages")
                 .post(formBody)
-                .addHeader("Authorization", Credentials.basic("api", MAILGUN_API_KEY))
+                .addHeader("Authorization", Credentials.basic("api", mailgunApiKey))
                 .build();
 
         try (Response response = client.newCall(request).execute()) {
