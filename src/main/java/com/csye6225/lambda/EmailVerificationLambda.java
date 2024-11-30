@@ -158,7 +158,7 @@ public class EmailVerificationLambda implements RequestHandler<SNSEvent, String>
     }
 
     private void sendVerificationEmail(String email, String token, String mailgunApiKey, String mailgunDomain, Context context) {
-        String verificationLink = String.format("http://%s/v1/user/verify?token=%s", DOMAIN_NAME, token);
+        String verificationLink = String.format("https://%s/v1/user/verify?token=%s", DOMAIN_NAME, token);
         context.getLogger().log("Generated verification link: " + verificationLink);
 
         RequestBody formBody = new FormBody.Builder()
